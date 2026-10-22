@@ -1,0 +1,32 @@
+# A cada 30 min, em QA e PROD: baixa o sitemap, envia para o Volume do ambiente, roda o Job
+# e faz o serving endpoint seguir o @champion. Fica no GitHub porque o Databricks Free Edition
+# não acessa a internet.
+name: ingest
+
+on:
+  schedule:
+    - cron: "17,47 * * * *"  # a cada 30 min, fora do :00/:30 (picos em que o GitHub atrasa ou pula)
+  workflow_dispatch:         # botão "Run workflow": roda QA e PROD na hora
+
+jobs:
+  ingest:
+    strategy:
+      fail-fast: false       # QA falhar não cancela PROD
+      matrix:
+        include:
+          - { target: qa, branch: develop }
+          - { target: prod, branch: main }
+    concurrency: cd-${{ matrix.branch }}   # mesma fila do cd do ambiente: ingest e deploy nunca juntos
+    runs-on: ubuntu-latest
+    environment: ${{ matrix.target }}
+    env:
+      DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+      DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with: { ref: "${{ matrix.branch }}" }   # QA roda o código da develop; PROD, o da main
+      - uses: hashicorp/setup-terraform@v3
+        with: { terraform_wrapper: false }
+      - uses: databricks/setup-cli@main
+      - run: make sitemap run TARGET=${{ matrix.target }}
+      - run: make tf-serving-plan tf-serving-apply TARGET=${{ matrix.target }}   # endpoint segue o @champion

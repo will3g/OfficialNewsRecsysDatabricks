@@ -1,0 +1,29 @@
+# Job de 3 tasks, uma por notebook. Serverless: nenhum cluster para configurar.
+resources:
+  jobs:
+    recsys:
+      name: news-recsys-${bundle.target}
+
+      parameters:
+        - name: schema
+          default: ${var.schema}
+
+      environments:
+        - environment_key: padrao
+          spec:
+            environment_version: "4"   # já traz pandas, scikit-learn, scipy e mlflow
+
+      tasks:
+        - task_key: dados
+          environment_key: padrao
+          notebook_task: { notebook_path: ../notebooks/01_dados.ipynb }
+
+        - task_key: treino
+          depends_on: [{ task_key: dados }]
+          environment_key: padrao
+          notebook_task: { notebook_path: ../notebooks/02_treino.ipynb }
+
+        - task_key: recomendacoes
+          depends_on: [{ task_key: treino }]
+          environment_key: padrao
+          notebook_task: { notebook_path: ../notebooks/03_recomendacoes.ipynb }

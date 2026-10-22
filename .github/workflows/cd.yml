@@ -1,0 +1,69 @@
+# CD: merge na develop → QA - merge na main → PROD.
+#   infra      → Terraform do GitHub (environments, URLs das apps, proteção das branches)
+#                e do Databricks (schema + Volume do ambiente)
+#   databricks → envia o sitemap de exemplo, publica o Job e roda o pipeline no ambiente
+#   serving    → Terraform do serving endpoint: passa a servir o @champion que o Job acabou de definir
+#   streamlit  → a app do ambiente se atualiza sozinha pela branch; aqui conferimos se responde
+# serving e streamlit rodam em paralelo depois do Job: a app (Tabela Gold) já pode ser aberta
+# enquanto o endpoint troca de versão (até lá ele segue servindo a versão anterior).
+name: cd
+
+on:
+  push:
+    branches: [develop, main]
+  workflow_dispatch:         # botão "Run workflow" (develop = QA, main = PROD)
+
+concurrency: cd-${{ github.ref_name }}   # um deploy por vez em cada ambiente
+
+env:
+  TARGET: ${{ github.ref_name == 'main' && 'prod' || 'qa' }}
+  DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+  DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+
+jobs:
+  infra:
+    runs-on: ubuntu-latest
+    concurrency: infra                   # QA e PROD não mexem no state ao mesmo tempo
+    env:
+      GITHUB_TOKEN: ${{ secrets.TF_GITHUB_TOKEN }}
+      GH_OWNER: ${{ github.repository_owner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with: { terraform_wrapper: false }
+      - uses: databricks/setup-cli@main
+      - run: make tf-plan tf-apply tf-db-plan tf-db-apply
+
+  databricks:
+    needs: infra
+    runs-on: ubuntu-latest
+    environment: ${{ github.ref_name == 'main' && 'prod' || 'qa' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: databricks/setup-cli@main
+      - run: make snapshot deploy run TARGET=$TARGET
+
+  serving:                               # depois do Job: o modelo e o @champion já existem
+    needs: databricks
+    runs-on: ubuntu-latest
+    environment: ${{ github.ref_name == 'main' && 'prod' || 'qa' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with: { terraform_wrapper: false }
+      - uses: databricks/setup-cli@main
+      - run: make tf-serving-plan tf-serving-apply TARGET=$TARGET
+
+  streamlit:                             # em paralelo ao serving: não espera o endpoint
+    needs: databricks
+    runs-on: ubuntu-latest
+    environment: ${{ github.ref_name == 'main' && 'prod' || 'qa' }}
+    steps:
+      - name: App no ar?
+        run: |
+          echo "O Streamlit Cloud atualiza a app sozinho a partir da branch $GITHUB_REF_NAME."
+          if curl -sfL --max-time 90 "${{ vars.STREAMLIT_URL }}" -o /dev/null; then
+            echo "App respondendo: ${{ vars.STREAMLIT_URL }}"
+          else
+            echo "::warning::App não respondeu: ${{ vars.STREAMLIT_URL }} (já foi criada no Streamlit Cloud?)"
+          fi

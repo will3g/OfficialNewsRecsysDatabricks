@@ -1,0 +1,40 @@
+# Databricks Asset Bundle: descreve o Job em código e publica com `make deploy`.
+# 3 ambientes no mesmo workspace, separados por schema e pasta:
+#   dev  → make deploy               (de cada pessoa: schema news_recsys_dev_<usuário>, prefixo [dev <usuário>])
+#   qa   → merge na develop (cd.yml)  ou  make deploy TARGET=qa
+#   prod → merge na main    (cd.yml)  ou  make deploy TARGET=prod
+bundle:
+  name: news-recsys-databricks
+
+include:
+  - resources/*.yml
+
+variables:
+  schema:
+    description: Schema das tabelas e do Volume (dentro do catálogo "workspace")
+    default: news_recsys_dev
+
+targets:
+  dev:
+    mode: development
+    default: true
+    variables:
+      schema: news_recsys_dev_${workspace.current_user.short_name}   # um schema por pessoa
+
+  qa:
+    mode: production
+    workspace:
+      root_path: /Workspace/Shared/.bundle/${bundle.name}/qa
+    run_as:
+      user_name: ${workspace.current_user.userName}
+    variables:
+      schema: news_recsys_qa
+
+  prod:
+    mode: production
+    workspace:
+      root_path: /Workspace/Shared/.bundle/${bundle.name}/prod
+    run_as:
+      user_name: ${workspace.current_user.userName}
+    variables:
+      schema: news_recsys_prod

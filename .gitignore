@@ -1,0 +1,21 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.pytest_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+.env
+.databricks/
+.streamlit/secrets.toml
+app/.streamlit/secrets.toml
+# Terraform: o state guarda secrets em texto puro - NUNCA versionar
+infra/**/.terraform/
+infra/**/*.tfstate
+infra/**/*.tfstate.*
+infra/**/terraform.tfvars
+infra/**/tfplan
+.DS_Store
+.playwright-mcp/
+.databricks
+.devcontainer

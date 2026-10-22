@@ -1,0 +1,9 @@
+# Lint dos notebooks e do app (usado no CI).
+line-length = 110
+extend-exclude = [".venv"]
+# Variáveis globais que o Databricks injeta nos notebooks
+builtins = ["spark", "dbutils", "display"]
+
+[lint]
+select = ["E", "F", "W", "B", "I"]
+ignore = ["B905"]  # zip(strict=) só polui o código didático

@@ -1,0 +1,8 @@
+# Ferramentas locais: lint dos notebooks e app Streamlit
+ruff
+nbformat
+streamlit
+pandas
+pyarrow
+databricks-sql-connector
+scikit-learn
